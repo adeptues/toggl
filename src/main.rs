@@ -18,10 +18,14 @@ use structopt::StructOpt;
 /// 
 /// Example Usage:
 /// 
+/// To get a list of all the projects and their ids under the hss workspace do
+/// 
+/// toggl --get-project-ids true -t <API_TOKEN>
+/// 
 /// To log 7.5 hours for each day monday to friday between the second of july and the 1st of august for a given pid do
 /// the following 
 /// 
-/// toggl -s '02-07-2018 00:00:00' -e '01-08-2018 00:00:00' -p 139353704 -t <SOME API TOKEN
+/// toggl -s '02-07-2018 00:00:00' -e '01-08-2018 00:00:00' -p 139353704 -t <SOME API TOKEN>
 #[derive(StructOpt, Debug)]
 #[structopt(name = "toggl")]
 struct Opt{
@@ -41,7 +45,11 @@ struct Opt{
     token:String,
     ///Prints the project id's to be used with the -p option 
     #[structopt( long = "get-project-ids")]
-    project_ids:Option<bool>
+    project_ids:Option<bool>,
+
+    /// The workspace id to be used with --get-project-ids
+    #[structopt( long = "workspace-id",default_value="741311")]
+    workspace_id:isize,
 }
 fn main() {
     //sick 138334910
@@ -52,7 +60,7 @@ fn main() {
     let opt = Opt::from_args();
     let toggl = Toggl::new(opt.token);
     if opt.project_ids.is_some() && opt.project_ids.unwrap(){
-        let projects = toggl.get_projects(741311).unwrap();
+        let projects = toggl.get_projects(opt.workspace_id).unwrap();
         for proj in projects.iter(){
             println!("Project {} , {}",proj.id,proj.name );
         }
@@ -104,7 +112,7 @@ pub fn time_entries_range(start: DateTime<Utc>, end: DateTime<Utc>, toggl: Toggl
     let mut current = start;
     let days = chrono::Duration::days(1);
     let dur = std::time::Duration::from_secs(27000);
-
+    //isbfore and after methods arnt needed with chrono time as the arithmatic ops are overloaded
     while current < end {
         let time_entry = api::TimeEntry::new(current, dur, pid);
         //only do this for monday to friday
@@ -125,29 +133,18 @@ pub fn time_entries_range(start: DateTime<Utc>, end: DateTime<Utc>, toggl: Toggl
         std::thread::sleep(std::time::Duration::from_secs(1));
     }
 }
-///Check if the before value is before the current value ie it is in the past
-pub fn is_before(current: DateTime<Utc>, before: DateTime<Utc>) -> bool {
-    if before < current {
-        return true;
-    }
-    return false;
-}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    pub fn test_is_before() {
-        let current = Utc.ymd(2018, 09, 15).and_hms(0, 0, 0);
-        let before = Utc.ymd(2018, 09, 13).and_hms(0, 0, 0);
-        assert!(is_before(current, before));
-    }
+    
 }
 
 mod api {
     use reqwest;
     use reqwest::header::{Basic, Headers};
-
-    use chrono::offset::LocalResult;
+    use serde_json;
+    //use chrono::offset::LocalResult;
     use chrono::prelude::*;
 
     #[derive(Serialize, Deserialize, Debug)]
@@ -164,7 +161,6 @@ mod api {
     #[derive(Serialize, Deserialize, Debug)]
     pub struct TimeEntry {
         description: String,
-        //wid:isize,
         pid: isize,
         start: String, //iso 8601 date
         stop: String,
@@ -209,7 +205,7 @@ mod api {
     pub struct Toggl {
         api_token: String,
     }
-    use serde_json;
+    
     impl Toggl {
         pub fn new(api_token: String) -> Toggl {
             return Toggl { api_token };
