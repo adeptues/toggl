@@ -14,7 +14,7 @@ use chrono::prelude::*;
 use structopt::StructOpt;
 //TODO / WARN there is bug in that everything is one hour out
 
-///A command line CLI to bulk upload time entries to toggl in continues time blocks.
+///A command line CLI to bulk upload time entries to toggl in continious time blocks.
 /// 
 /// Example Usage:
 /// 
@@ -28,17 +28,18 @@ struct Opt{
     /// The start datetime block in the format dd-mm-YYYY 00:00:00.
     /// For example the 31st of august 31-08-2018 00:00:00
     #[structopt(short = "s", long = "start")]
-    start:String,
+    start:Option<String>,
     /// The same format as the start time but for specifying the end block
     #[structopt(short = "e", long = "stop")]
-    stop:String,
-    // The project id of the toggl project the time should be recorded against
+    stop:Option<String>,
+
+    /// The project id of the toggl project the time should be recorded against
     #[structopt(short = "p", long = "project-id")]
-    pid:isize,
+    pid:Option<isize>,
     /// The toggl API token which is found in the 'user profile' section on toggl
     #[structopt(short = "t", long = "token")]
     token:String,
-    //Prints the project id's to be used with the -p option 
+    ///Prints the project id's to be used with the -p option 
     #[structopt( long = "get-project-ids")]
     project_ids:Option<bool>
 }
@@ -47,6 +48,7 @@ fn main() {
     //support patched 138334610
     //1.6 139353704
     // 1.7 139353826
+    //139353626 eforms embedded
     let opt = Opt::from_args();
     let toggl = Toggl::new(opt.token);
     if opt.project_ids.is_some() && opt.project_ids.unwrap(){
@@ -56,13 +58,26 @@ fn main() {
         }
         std::process::exit(0);
     }
+    
+    let start = match opt.start{
+        Some(x) => x,
+        None => panic!("Start option cannot be empty!")
+    };
+    let end = match opt.stop{
+        Some(x) => x,
+        None => panic!("Start option cannot be empty!")
+    };
+    let pid = match opt.pid{
+        Some(x) => x,
+        None => panic!("Start option cannot be empty!")
+    };
 
-    let start = Utc.datetime_from_str(opt.start.as_str(), "%d-%m-%Y %H:%M:%S").unwrap();
-    let end = Utc.datetime_from_str(opt.stop.as_str(), "%d-%m-%Y %H:%M:%S").unwrap();
+    let start = Utc.datetime_from_str(start.as_str(), "%d-%m-%Y %H:%M:%S").unwrap();
+    let end = Utc.datetime_from_str(end.as_str(), "%d-%m-%Y %H:%M:%S").unwrap();
     /* let start = Utc.datetime_from_str(opt.start.as_str(), "%d-%m-%Y").unwrap();
     let end = Utc.datetime_from_str(opt.stop.as_str(), "%d-%m-%Y").unwrap(); */
     
-    time_entries_range(start, end, toggl, opt.pid);
+    time_entries_range(start, end, toggl, pid);
 
 
     /* let vip17 = 139353826;
