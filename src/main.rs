@@ -22,15 +22,16 @@ use structopt::StructOpt;
 /// 
 /// toggl --get-project-ids true -t <API_TOKEN>
 /// 
-/// To log 7.5 hours for each day monday to friday between the second of july and the 1st of august for a given pid do
-/// the following 
+/// To log 7.5 hours for each day monday to friday for the month of july do the following
 /// 
-/// toggl -s '02-07-2018 00:00:00' -e '01-08-2018 00:00:00' -p 139353704 -t <SOME API TOKEN>
+/// toggl -s '01-07-2018' -e '31-07-2018' -p 139353704 -t <SOME API TOKEN>
+/// 
+/// All date ranges are inclusive
 #[derive(StructOpt, Debug)]
 #[structopt(name = "toggl")]
 struct Opt{
-    /// The start datetime block in the format dd-mm-YYYY 00:00:00.
-    /// For example the 31st of august 31-08-2018 00:00:00
+    /// The start datetime block in the format dd-mm-YYYY .
+    /// For example the 31st of august 31-08-2018
     #[structopt(short = "s", long = "start")]
     start:Option<String>,
     /// The same format as the start time but for specifying the end block
@@ -68,20 +69,25 @@ fn main() {
     }
     
     let start = match opt.start{
-        Some(x) => x,
+        Some(x) =>  {
+            let d = NaiveDate::parse_from_str(&x, "%d-%m-%Y").expect("Could not parse date format dd-mm-yyyy");
+            Utc.ymd(d.year(), d.month(), d.day()).and_hms(0, 0, 0)
+        },
         None => panic!("Start option cannot be empty!")
     };
     let end = match opt.stop{
-        Some(x) => x,
+        Some(x) => {
+            let d = NaiveDate::parse_from_str(&x, "%d-%m-%Y").expect("Could not parse date format dd-mm-yyyy");
+            Utc.ymd(d.year(), d.month(), d.day()).and_hms(0, 0, 0)
+        },
         None => panic!("Start option cannot be empty!")
     };
-    let pid = match opt.pid{
-        Some(x) => x,
-        None => panic!("Start option cannot be empty!")
-    };
-
-    let start = Utc.datetime_from_str(start.as_str(), "%d-%m-%Y %H:%M:%S").unwrap();
-    let end = Utc.datetime_from_str(end.as_str(), "%d-%m-%Y %H:%M:%S").unwrap();
+    let pid = opt.pid.expect("Need a valid project id");
+    if !(start <= end){//TODO maybe change to an assert
+        panic!("the start date must be before the end date");
+    }
+    /* let start = Utc.datetime_from_str(start.as_str(), "%d-%m-%Y %H:%M:%S").unwrap();
+    let end = Utc.datetime_from_str(end.as_str(), "%d-%m-%Y %H:%M:%S").unwrap(); */
     /* let start = Utc.datetime_from_str(opt.start.as_str(), "%d-%m-%Y").unwrap();
     let end = Utc.datetime_from_str(opt.stop.as_str(), "%d-%m-%Y").unwrap(); */
     
@@ -127,7 +133,7 @@ pub fn time_entries_range(start: DateTime<Utc>, end: DateTime<Utc>, pid: isize) 
     let dur = std::time::Duration::from_secs(27000);
     let mut entries:Vec<api::TimeEntry> = vec!();
     //isbfore and after methods arnt needed with chrono time as the arithmatic ops are overloaded
-    while current < end {
+    while current <= end {
         let time_entry = api::TimeEntry::new(current, dur, pid);
         //only do this for monday to friday
         if current.weekday() != chrono::Weekday::Sat && current.weekday() != chrono::Weekday::Sun {
@@ -142,19 +148,23 @@ pub fn time_entries_range(start: DateTime<Utc>, end: DateTime<Utc>, pid: isize) 
 #[cfg(test)]
 mod tests {
     use super::*;
-
+    use std::str::FromStr;
     /// Test Helper util to get the day of the week a time entry is on
-    fn day_of_week(entry:api::TimeEntry){
-
+    fn day_of_week(entry: &api::TimeEntry) -> Option<Weekday>{
+        let start = DateTime::parse_from_rfc3339(entry.start.as_str()).unwrap();
+        let end = DateTime::parse_from_rfc3339(entry.stop.as_str()).unwrap();
+        if start < end && start.date() == end.date() {
+            return Some(start.weekday());
+        }
+        return None;
     }
     #[test]
     fn test_time_enties_range_inclusive(){
         let start = Utc.datetime_from_str("31-12-2018 00:00:00", "%d-%m-%Y %H:%M:%S").unwrap();
         let end = Utc.datetime_from_str("04-01-2019 00:00:00", "%d-%m-%Y %H:%M:%S").unwrap();
         let entries = time_entries_range(start, end, 2);
-        //assert_eq!(entries[0].duration,27000);
+        assert_eq!(entries[0].duration,27000);
         assert_eq!(entries.len(),5);
-        //check duration is 7:30 hours
     }
     #[test]
     fn test_time_enties_range_ignores_weekends(){
@@ -162,6 +172,18 @@ mod tests {
         let end = Utc.datetime_from_str("31-12-2018 00:00:00", "%d-%m-%Y %H:%M:%S").unwrap();
         let entries = time_entries_range(start, end, 2);
         assert_eq!(entries.len(),3);
+        assert_eq!(day_of_week(&entries[0]).unwrap(),Weekday::Thu);
+        assert_eq!(day_of_week(&entries[1]).unwrap(),Weekday::Fri);
+        assert_eq!(day_of_week(&entries[2]).unwrap(),Weekday::Mon);
+    }
+
+    #[test]
+    fn test_time_entries_range_single_day(){
+        let start = Utc.datetime_from_str("27-12-2018 00:00:00", "%d-%m-%Y %H:%M:%S").unwrap();
+        let end = Utc.datetime_from_str("27-12-2018 00:00:00", "%d-%m-%Y %H:%M:%S").unwrap();
+        let entries = time_entries_range(start, end, 2);
+        assert_eq!(entries.len(),1);
+        assert_eq!(day_of_week(&entries[0]).unwrap(),Weekday::Thu);
     }
 }
 
@@ -185,12 +207,12 @@ mod api {
     }
     #[derive(Serialize, Deserialize, Debug)]
     pub struct TimeEntry {
-        description: String,
-        pid: isize,
-        start: String, //iso 8601 date
-        stop: String,
-        duration: u64,
-        created_with: String,
+        pub description: String,
+        pub pid: isize,
+        pub start: String, //iso 8601 date
+        pub stop: String,
+        pub duration: u64,
+        pub created_with: String,
     }
     #[derive(Serialize, Deserialize, Debug)]
     pub struct Payload {
