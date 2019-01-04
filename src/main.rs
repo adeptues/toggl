@@ -85,7 +85,20 @@ fn main() {
     /* let start = Utc.datetime_from_str(opt.start.as_str(), "%d-%m-%Y").unwrap();
     let end = Utc.datetime_from_str(opt.stop.as_str(), "%d-%m-%Y").unwrap(); */
     
-    time_entries_range(start, end, toggl, pid);
+    let entries = time_entries_range(start, end, pid);
+    for time_entry in entries{
+        let check = toggl.create_time_entry(time_entry);
+            match check {
+                Ok(c) => {
+                    if !c {
+                        panic!("Error got false from upload {}", c);
+                    }
+                }
+                Err(_) => panic!("Error "),
+            }
+        //sleep for 1 second
+        std::thread::sleep(std::time::Duration::from_secs(1));
+    }
 
 
     /* let vip17 = 139353826;
@@ -107,37 +120,49 @@ fn main() {
     
 }
 
-pub fn time_entries_range(start: DateTime<Utc>, end: DateTime<Utc>, toggl: Toggl, pid: isize) {
+pub fn time_entries_range(start: DateTime<Utc>, end: DateTime<Utc>, pid: isize) -> Vec<api::TimeEntry>{
     //while start is before end create entry for each day
     let mut current = start;
     let days = chrono::Duration::days(1);
     let dur = std::time::Duration::from_secs(27000);
+    let mut entries:Vec<api::TimeEntry> = vec!();
     //isbfore and after methods arnt needed with chrono time as the arithmatic ops are overloaded
     while current < end {
         let time_entry = api::TimeEntry::new(current, dur, pid);
         //only do this for monday to friday
         if current.weekday() != chrono::Weekday::Sat && current.weekday() != chrono::Weekday::Sun {
-            let check = toggl.create_time_entry(time_entry);
-            match check {
-                Ok(c) => {
-                    if !c {
-                        panic!("Error got false from upload {}", c);
-                    }
-                }
-                Err(_) => panic!("Error "),
-            }
+            entries.push(time_entry);
         }
         //add 1 day to current
         current = current + days;
-        //sleep for 1 second
-        std::thread::sleep(std::time::Duration::from_secs(1));
     }
+    return entries;
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
+    /// Test Helper util to get the day of the week a time entry is on
+    fn day_of_week(entry:api::TimeEntry){
+
+    }
+    #[test]
+    fn test_time_enties_range_inclusive(){
+        let start = Utc.datetime_from_str("31-12-2018 00:00:00", "%d-%m-%Y %H:%M:%S").unwrap();
+        let end = Utc.datetime_from_str("04-01-2019 00:00:00", "%d-%m-%Y %H:%M:%S").unwrap();
+        let entries = time_entries_range(start, end, 2);
+        //assert_eq!(entries[0].duration,27000);
+        assert_eq!(entries.len(),5);
+        //check duration is 7:30 hours
+    }
+    #[test]
+    fn test_time_enties_range_ignores_weekends(){
+        let start = Utc.datetime_from_str("27-12-2018 00:00:00", "%d-%m-%Y %H:%M:%S").unwrap();
+        let end = Utc.datetime_from_str("31-12-2018 00:00:00", "%d-%m-%Y %H:%M:%S").unwrap();
+        let entries = time_entries_range(start, end, 2);
+        assert_eq!(entries.len(),3);
+    }
 }
 
 mod api {
