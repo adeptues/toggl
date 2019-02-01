@@ -2,7 +2,7 @@
 name = "toggl"
 version = "0.1.0"
 authors = ["Thomas Helmkay <thomas.helmkay@e-healthinnovations.com>"]
-
+description="toggl a command line tool to bulk upload toggl entries in continuous time blocks"
 [dependencies]
 reqwest = "0.8.8"
 serde = "1.0.78"
