@@ -6,6 +6,7 @@ extern crate serde_derive;
 extern crate chrono;
 extern crate serde;
 extern crate serde_json;
+extern crate url;
 
 #[macro_use]
 extern crate structopt;
@@ -47,7 +48,9 @@ struct Opt{
     ///Prints the project id's to be used with the -p option 
     #[structopt( long = "get-project-ids")]
     project_ids:Option<bool>,
-
+    ///Get the time entries in the range specified by the -s -e switches
+    #[structopt(long ="get-time-entries")]
+    time_entries:Option<bool>,
     /// The workspace id to be used with --get-project-ids
     #[structopt( long = "workspace-id",default_value="741311")]
     workspace_id:isize,
@@ -60,6 +63,7 @@ fn main() {
     //139353626 eforms embedded
     let opt = Opt::from_args();
     let toggl = Toggl::new(opt.token);
+    
     if opt.project_ids.is_some() && opt.project_ids.unwrap(){
         let projects = toggl.get_projects(opt.workspace_id).unwrap();
         for proj in projects.iter(){
@@ -82,10 +86,25 @@ fn main() {
         },
         None => panic!("Start option cannot be empty!")
     };
+
+    if opt.time_entries.is_some() && opt.time_entries.unwrap() {
+        let entries =  match toggl.get_time_entries_in_range(start, end){
+            Ok(x) => x,
+            Err(e) => panic!("Error getting time entires {}",e)
+        };
+
+
+        //TODO print a text table
+        for entry in entries{
+            println!("From: {} To: {}",entry.start,entry.stop);
+        }
+        std::process::exit(0);
+    }
     let pid = opt.pid.expect("Need a valid project id");
     if !(start <= end){//TODO maybe change to an assert
         panic!("the start date must be before the end date");
     }
+    
     /* let start = Utc.datetime_from_str(start.as_str(), "%d-%m-%Y %H:%M:%S").unwrap();
     let end = Utc.datetime_from_str(end.as_str(), "%d-%m-%Y %H:%M:%S").unwrap(); */
     /* let start = Utc.datetime_from_str(opt.start.as_str(), "%d-%m-%Y").unwrap();
@@ -126,6 +145,8 @@ fn main() {
     
 }
 
+/// Create a list of time entries between the given start and end range for a given project id 
+/// This does not create them in toggle
 pub fn time_entries_range(start: DateTime<Utc>, end: DateTime<Utc>, pid: isize) -> Vec<api::TimeEntry>{
     //while start is before end create entry for each day
     let mut current = start;
@@ -193,12 +214,16 @@ mod api {
     use serde_json;
     //use chrono::offset::LocalResult;
     use chrono::prelude::*;
+    
+use url::form_urlencoded::{byte_serialize, parse};
 
+pub struct ResponseWrapper{
+}
     #[derive(Serialize, Deserialize, Debug)]
     pub struct Project {
        pub  id: isize,
         wid: isize,
-        cid: isize,
+        //cid: isize,
         pub name: String,
         billable: bool,
         is_private: bool,
@@ -256,6 +281,20 @@ mod api {
     impl Toggl {
         pub fn new(api_token: String) -> Toggl {
             return Toggl { api_token };
+        }
+
+        pub fn get_time_entries_in_range(&self,start:DateTime<Utc>,end:DateTime<Utc>) -> Result<Vec<TimeEntry>,reqwest::Error>{
+            let c = reqwest::Client::new();
+
+            let url = format!("https://www.toggl.com/api/v8/time_entries?start_date={}&end_date={}",start.to_rfc3339(),end.to_rfc3339());
+            let urlencoded: String = byte_serialize(url.as_bytes()).collect();
+            println!("{}",urlencoded);
+            let mut r = c
+                .get(url.as_str())
+                .basic_auth(self.api_token.clone(), Some("api_token".to_string()))
+                .send()?;
+            let entries:Vec<TimeEntry> = r.json()?;
+            return Ok(entries);
         }
 
         pub fn create_time_entry(&self, time_entry: TimeEntry) -> Result<bool, reqwest::Error> {
