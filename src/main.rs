@@ -47,13 +47,13 @@ struct Opt{
     token:String,
     ///Prints the project id's to be used with the -p option 
     #[structopt( long = "get-project-ids")]
-    project_ids:Option<bool>,
+    project_ids:bool,
     ///Get the time entries in the range specified by the -s -e switches
-    #[structopt(long ="get-time-entries")]
-    time_entries:Option<bool>,
+    #[structopt(short = "l",long ="get-time-entries")]
+    time_entries:bool,
     /// The workspace id to be used with --get-project-ids
     #[structopt( long = "workspace-id",default_value="741311")]
-    workspace_id:isize,
+    workspace_id:isize
 }
 fn main() {
     //sick 138334910
@@ -64,7 +64,7 @@ fn main() {
     let opt = Opt::from_args();
     let toggl = Toggl::new(opt.token);
     
-    if opt.project_ids.is_some() && opt.project_ids.unwrap(){
+    if opt.project_ids{
         let projects = toggl.get_projects(opt.workspace_id).unwrap();
         for proj in projects.iter(){
             println!("Project {} , {}",proj.id,proj.name );
@@ -87,7 +87,7 @@ fn main() {
         None => panic!("Start option cannot be empty!")
     };
 
-    if opt.time_entries.is_some() && opt.time_entries.unwrap() {
+    if opt.time_entries {
         let entries =  match toggl.get_time_entries_in_range(start, end){
             Ok(x) => x,
             Err(e) => panic!("Error getting time entires {}",e)
