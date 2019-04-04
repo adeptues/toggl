@@ -240,6 +240,19 @@ pub struct ResponseWrapper{
         pub created_with: String,
     }
     #[derive(Serialize, Deserialize, Debug)]
+    pub struct TimeEntryDetails{
+        pub id:isize,
+        pub guid:String,
+        pub wid:isize,
+        pub billable:bool,
+        pub start:String,
+        pub stop:String,
+        pub duration:u64,
+        pub duronly:bool,
+        pub at:String,
+        pub uid:isize
+    }
+    #[derive(Serialize, Deserialize, Debug)]
     pub struct Payload {
         time_entry: TimeEntry,
     }
@@ -282,18 +295,18 @@ pub struct ResponseWrapper{
         pub fn new(api_token: String) -> Toggl {
             return Toggl { api_token };
         }
-
-        pub fn get_time_entries_in_range(&self,start:DateTime<Utc>,end:DateTime<Utc>) -> Result<Vec<TimeEntry>,reqwest::Error>{
+        /// Gets all the time entries in a specified range - This will get at most 1000 entries which may destroy mem
+        pub fn get_time_entries_in_range(&self,start:DateTime<Utc>,end:DateTime<Utc>) -> Result<Vec<TimeEntryDetails>,reqwest::Error>{
             let c = reqwest::Client::new();
-
-            let url = format!("https://www.toggl.com/api/v8/time_entries?start_date={}&end_date={}",start.to_rfc3339(),end.to_rfc3339());
-            let urlencoded: String = byte_serialize(url.as_bytes()).collect();
-            println!("{}",urlencoded);
+            let start_d:String = byte_serialize(start.to_rfc3339().as_bytes()).collect();
+            let end_d:String = byte_serialize(end.to_rfc3339().as_bytes()).collect();
+            let url = format!("https://www.toggl.com/api/v8/time_entries?start_date={}&end_date={}",start_d,end_d);
             let mut r = c
                 .get(url.as_str())
                 .basic_auth(self.api_token.clone(), Some("api_token".to_string()))
                 .send()?;
-            let entries:Vec<TimeEntry> = r.json()?;
+            
+            let entries:Vec<TimeEntryDetails> = r.json()?;
             return Ok(entries);
         }
 
