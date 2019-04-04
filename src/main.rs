@@ -94,7 +94,8 @@ fn main() {
         };
 
 
-        //TODO print a text table
+        //TODO print a text table list them in a table and allow basic navigation/ actions delete by id
+        // so pressign d makes prompt [delete] >> 1173 for delete by id and range sytax 1173~1194 and 1173,1123,33432 for multiple
         for entry in entries{
             println!("From: {} To: {}",entry.start,entry.stop);
         }
